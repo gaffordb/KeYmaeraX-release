@@ -9,7 +9,7 @@ import edu.cmu.cs.ls.keymaerax.bellerophon._
 import edu.cmu.cs.ls.keymaerax.bellerophon.parser.BelleParser
 import edu.cmu.cs.ls.keymaerax.btactics._
 import edu.cmu.cs.ls.keymaerax.infrastruct.Augmentors._
-import edu.cmu.cs.ls.keymaerax.core.{Box, Expression, FuncOf, Loop, ODESystem, PredOf, Sequent, StaticSemantics, SubstitutionClashException, SubstitutionPair, USubst, Variable}
+import edu.cmu.cs.ls.keymaerax.core.{Box, Expression, Formula, FuncOf, Loop, ODESystem, PredOf, Sequent, StaticSemantics, SubstitutionClashException, SubstitutionPair, USubst, Variable}
 import edu.cmu.cs.ls.keymaerax.infrastruct.{Position, RenUSubst, RestrictedBiDiUnificationMatch}
 import edu.cmu.cs.ls.keymaerax.parser.Location
 import edu.cmu.cs.ls.keymaerax.btactics.macros._
@@ -64,7 +64,6 @@ trait ProofTreeNode {
     * @see [[ProvableSig.isProved]] */
   final def isProved: Boolean = provable.isProved
 
-
   // proof tree navigation
 
   /** The node's parent, None if root. */
@@ -75,6 +74,8 @@ trait ProofTreeNode {
 
   /** All direct and indirect descendants of this node. */
   def allDescendants: List[ProofTreeNode] = theDescendants
+
+  def allWitnessedFacts: List[Formula] = allDescendants.flatMap(x => x.conclusion.ante)
 
   /** All direct and indirect ancestors of this node. */
   def allAncestors: List[ProofTreeNode] = theAncestors
@@ -297,7 +298,6 @@ trait ProofTree {
     * @see [[isProved]] */
   def done: Boolean
 
-
   /** Locates a node in the proof tree by its ID.
     * @see noteIdFromString(String) */
   def locate(id: ProofTreeNodeId): Option[ProofTreeNode]
@@ -322,7 +322,7 @@ trait ProofTree {
     * Uses `converter` to turn the recorded steps into a tactic. */
   def tacticString(converter: TraceToTacticConverter): (String, Map[Location, ProofTreeNode])
 
-  /** The global tactic that reproducse this whole proof tree from the conjecture at the root (very expensive) */
+  /** The global tactic that reproduce this whole proof tree from the conjecture at the root (very expensive) */
   def tactic: BelleExpr
 
   /** The proof info with meta information about this proof, e.g., its name. */

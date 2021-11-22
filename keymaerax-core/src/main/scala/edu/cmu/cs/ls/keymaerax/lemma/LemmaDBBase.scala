@@ -64,6 +64,9 @@ abstract class LemmaDBBase extends LemmaDB {
         throw new IllegalStateException("Lemma " + id + " was not successfully inserted in database.")
       case Some(got) =>
         if (proofTermLemma(got) != alternativeLemma) {
+          print("Got: " + got.fact.witnessedFacts)
+          print("Stored: " + alternativeLemma.fact.witnessedFacts)
+          print("Equal?: " + got.fact.witnessedFacts == alternativeLemma.fact.witnessedFacts)
           remove(id)
           throw new IllegalStateException(s"Lemma retrieved back from DB after storing it differed from lemma in memory -> deleted\n\tOriginal: ${alternativeLemma.toString}\n\tReloaded: ${got.toString}")
         }

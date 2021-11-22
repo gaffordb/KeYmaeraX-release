@@ -30,13 +30,13 @@ class QEHiderTests extends TacticTestBase {
     val pr = proveBy(seq, minQE)
     println("Proved: " + pr.proved)
     println("MinSeq: " + pr.minSequent)
-    println("Witnessed: " + pr.witnessedFacts)
+    println("Witnessed: " + pr.witnessedFacts.map(x => x.prettyString + "\n=======================================\n"))
   }
 
   "QE Hider: 2 ante, 2 succ, 1 necessary ante, both dependent" should "output used arguments" taggedAs IgnoreInBuildTest in withMathematica { qeTool =>
     val seq = "x>0, x=2 \n  ==> x>=2, y=-1".asSequent
     println("Before" + seq.prettyString)
-    val pr = proveBy(seq,prop & OnAll(QE))
+    val pr = proveBy(seq,minQE)
     println("After" + pr.prettyString)
   }
 

@@ -383,8 +383,7 @@ final case class Sequent(ante: immutable.IndexedSeq[Formula], succ: immutable.In
   */
 final case class Provable private(conclusion: Sequent,
                                   subgoals: immutable.IndexedSeq[Sequent],
-                                  minSequent: Sequent = null,
-                                  witnessedFacts: List[Sequent] = Nil) {
+                                  minSequent: Sequent = null) {
   /**
     * Position types for the subgoals of a Provable.
     */
@@ -410,9 +409,7 @@ final case class Provable private(conclusion: Sequent,
   final def apply(s: Sequent): Provable = {
     new Provable(conclusion, subgoals, s)
   }
-  final def apply(witnessed: List[Sequent]): Provable = {
-    new Provable(conclusion, subgoals, minSequent, witnessedFacts ++ witnessed)
-  }
+
   /**
     * Apply Rule: Apply given proof rule to the indicated subgoal of this Provable, returning the resulting Provable
     * {{{

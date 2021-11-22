@@ -71,7 +71,7 @@ trait ProvableSig {
 
   def minSequent: Sequent
 
-  def witnessedFacts: List[Sequent]
+  def witnessedFacts: List[Sequent] = Nil
 
   /**
     * Apply Rule: Apply given proof rule to the indicated subgoal of this Provable, returning the resulting Provable
@@ -368,37 +368,43 @@ case class ElidingProvable(provable: Provable) extends ProvableSig {
   override val conclusion: Sequent = provable.conclusion
   override val subgoals: IndexedSeq[Sequent] = provable.subgoals
   override val minSequent: Sequent = provable.minSequent
-  override val witnessedFacts: List[Sequent] = provable.witnessedFacts
 
   override def proved: Sequent = provable.proved
 
   override val axioms: Map[String, ProvableSig] = ElidingProvable.axioms
   override val rules: Map[String, ProvableSig] = ElidingProvable.rules
 
-  override def apply(rule: Rule, subgoal: Subgoal): ProvableSig = ElidingProvable(provable(rule,subgoal), steps+1)
+  override def apply(rule: Rule, subgoal: Subgoal): ProvableSig = ElidingProvable(provable(rule,subgoal),
+    steps+1,
+    witnessedFacts ++ provable.sub(subgoal).subgoals.toList
+  )
 
-  override def apply(s: Sequent): ProvableSig = ElidingProvable(provable(s), steps)
-  override def apply(witnessed: List[Sequent]): ProvableSig = ElidingProvable(provable(witnessed), steps)
+  override def apply(s: Sequent): ProvableSig = ElidingProvable(provable(s), steps,
+    witnessedFacts
+  )
+  override def apply(witnessed: List[Sequent]): ProvableSig = ElidingProvable(provable, steps, witnessedFacts++witnessed)
 
   override def apply(subderivation: ProvableSig, subgoal: Subgoal): ProvableSig =
-    ElidingProvable(provable(subderivation.underlyingProvable, subgoal), steps+subderivation.steps)
+    ElidingProvable(provable(subderivation.underlyingProvable, subgoal), steps+subderivation.steps, witnessedFacts++subderivation.witnessedFacts)
 
   override def apply(subst: USubst): ProvableSig =
-    ElidingProvable(provable(subst), steps+1)
+    ElidingProvable(provable(subst), steps+1, witnessedFacts)
 
   override def apply(ren: URename): ProvableSig =
-    ElidingProvable(provable(ren), steps+1)
+    ElidingProvable(provable(ren), steps+1, witnessedFacts)
 
-  override def apply(newConsequence: Sequent, rule: Rule): ProvableSig = ElidingProvable(provable(newConsequence, rule), steps+1)
+  override def apply(newConsequence: Sequent, rule: Rule): ProvableSig = ElidingProvable(provable(newConsequence, rule), steps+1,
+    witnessedFacts:+newConsequence
+  )
 
   override def apply(prolongation: ProvableSig): ProvableSig =
-    ElidingProvable(provable(prolongation.underlyingProvable), steps+prolongation.steps)
+    ElidingProvable(provable(prolongation.underlyingProvable), steps+prolongation.steps, witnessedFacts++prolongation.witnessedFacts)
 
-  override def sub(subgoal: Subgoal): ProvableSig = ElidingProvable(provable.sub(subgoal), steps)
+  override def sub(subgoal: Subgoal): ProvableSig = ElidingProvable(provable.sub(subgoal), steps, witnessedFacts)
 
-  override def startProof(goal: Sequent): ProvableSig = ElidingProvable(Provable.startProof(goal), 0)
+  override def startProof(goal: Sequent): ProvableSig = ElidingProvable(Provable.startProof(goal), 0, List(goal))
 
-  override def startProof(goal: Formula): ProvableSig = ElidingProvable(Provable.startProof(goal), 0)
+  override def startProof(goal: Formula): ProvableSig = ElidingProvable(Provable.startProof(goal), 0, List(Sequent(IndexedSeq(), IndexedSeq(goal))))
 
   override def proveArithmetic(t: QETool, f: Formula): ProvableSig = ElidingProvable.proveArithmetic(t,f)
 
@@ -408,14 +414,17 @@ case class ElidingProvable(provable: Provable) extends ProvableSig {
 }
 
 object ElidingProvable {
-  val axioms: Map[String, ProvableSig] = Provable.axioms.map(kvp => (kvp._1, ElidingProvable(kvp._2, 0)))
-  val rules: Map[String, ProvableSig] = Provable.rules.map(kvp => (kvp._1, ElidingProvable(kvp._2, 0)))
+  val axioms: Map[String, ProvableSig] = Provable.axioms.map(kvp => (kvp._1, ElidingProvable(kvp._2, 0, Nil)))
+  val rules: Map[String, ProvableSig] = Provable.rules.map(kvp => (kvp._1, ElidingProvable(kvp._2, 0, Nil)))
 
-  def apply(provable: Provable, initSteps: Int): ElidingProvable = new ElidingProvable(provable) { override def steps: Int = initSteps }
+  def apply(provable: Provable, initSteps: Int, initWitnessed: List[Sequent]): ElidingProvable = new ElidingProvable(provable) {
+    override def steps: Int = initSteps
+    override def witnessedFacts: List[Sequent] = initWitnessed
+  }
 
-  def startProof(goal: Sequent): ProvableSig = ElidingProvable(Provable.startProof(goal), 0)
+  def startProof(goal: Sequent): ProvableSig = ElidingProvable(Provable.startProof(goal), 0, List(goal))
 
-  def startProof(goal: Formula): ProvableSig = ElidingProvable(Provable.startProof(goal), 0)
+  def startProof(goal: Formula): ProvableSig = ElidingProvable(Provable.startProof(goal), 0, List(Sequent(IndexedSeq(), IndexedSeq(goal))))
 
   def proveArithmetic(tool: QETool, f: Formula): ProvableSig = ElidingProvable(Provable.proveArithmetic(tool,f))
 

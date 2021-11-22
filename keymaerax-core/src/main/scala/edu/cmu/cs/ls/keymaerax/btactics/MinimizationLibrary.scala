@@ -36,7 +36,7 @@ object MinimizationLibrary {
     displayLevel = "browse")
   lazy val minQE: BuiltInTactic = anon((p: ProvableSig) => {
     assert(p.subgoals.length == 1, s"minQE requires Provables with one subgoal; found ${p.subgoals.length} subgoals")
-    val simplified = proveBy(p, prop & smartHideAll)
+    val simplified = proveBy(p, smartHideAll)
 
     val weakenings = getWeakenings(simplified.subgoals.head)
     val provableWeakenings = weakenings.map {
