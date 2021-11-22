@@ -840,4 +840,9 @@ class TactixLibraryTests extends TacticTestBase {
     proveBy("x=0 ==> ".asSequent, useLemmaAt(lemmaName, Some(PosInExpr(0::Nil)))(-1)).subgoals.loneElement shouldBe "x=0 & x=0 ==> ".asSequent
   }
 
+
+  it should "try with several attempts" in withQE { _ => 
+    val fml = "x<y -> [{if (x>0) { x:=-x; } else { x:=x-1/(y-x); } }*]x<=y".asFormula
+    proveBy(fml, master()) shouldBe 'proved
+    }
 }

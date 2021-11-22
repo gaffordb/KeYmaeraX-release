@@ -946,12 +946,21 @@ object TactixLibrary extends HilbertCalculus
     */
   def proveBy(goal: ProvableSig, tactic: BelleExpr, defs: Declaration): ProvableSig = {
     val v = BelleProvable(goal, None, defs)
+
     BelleInterpreter(tactic, v) match {
-      case BelleProvable(provable, _, _) => provable
-//      //@note there is no other case at the moment
+      case BelleProvable(provable, _, _) =>
+        //val newFacts = provable.subgoals.toList
+        //provable.apply(newFacts)
+        provable
+      //      //@note there is no other case at the moment
 //      case r => throw BelleIllFormedError("Error in proveBy, goal\n" + goal + " was not provable but instead resulted in\n" + r)
     }
   }
+
+  def getFactsFromSequent(s: Sequent): List[Formula] = {
+    ((s.ante ++ s.succ).toList)
+  }
+
   def proveBy(goal: ProvableSig, tactic: BelleExpr): ProvableSig = proveBy(goal, tactic, Declaration(Map.empty))
 
   /**

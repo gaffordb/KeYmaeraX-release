@@ -450,7 +450,7 @@ object BelleParser extends TacticParser with Logging {
 
       //endregion
 
-      //region Stars and Repitition
+      //region Stars and Repetition
       case r :+ ParsedBelleExpr(expr, loc, l) :+ BelleToken(KLEENE_STAR, starLoc) =>
         val parsedExpr = SaturateTactic(expr)
         parsedExpr.setLocation(starLoc)

@@ -1016,6 +1016,7 @@ object DerivationInfoRegistry extends Logging {
       (ToolTactics.getClass, ru.typeOf[ToolTactics.type]),
       (Transitivity.getClass, ru.typeOf[Transitivity.type]),
       (UnifyUSCalculus.getClass, ru.typeOf[UnifyUSCalculus.type]),
+      (MinimizationLibrary.getClass, ru.typeOf[MinimizationLibrary.type]),
       (ModelPlex.getClass, ru.typeOf[ModelPlex.type])
     )
     objects.foreach({case (cl, ct) => initClass(cl, ct)})

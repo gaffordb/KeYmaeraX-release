@@ -19,7 +19,6 @@
 package edu.cmu.cs.ls.keymaerax.core
 
 import java.security.MessageDigest
-
 import edu.cmu.cs.ls.keymaerax.Configuration
 
 // require favoring immutable Seqs for soundness
@@ -382,7 +381,10 @@ final case class Sequent(ante: immutable.IndexedSeq[Formula], succ: immutable.In
   *  )
   * }}}
   */
-final case class Provable private(conclusion: Sequent, subgoals: immutable.IndexedSeq[Sequent]) {
+final case class Provable private(conclusion: Sequent,
+                                  subgoals: immutable.IndexedSeq[Sequent],
+                                  minSequent: Sequent = null,
+                                  witnessedFacts: List[Sequent] = Nil) {
   /**
     * Position types for the subgoals of a Provable.
     */
@@ -405,6 +407,12 @@ final case class Provable private(conclusion: Sequent, subgoals: immutable.Index
   final def proved: Sequent =
     if (isProved) conclusion else throw new UnprovedException("Only Provables that have been proved have a proven conclusion", toString)
 
+  final def apply(s: Sequent): Provable = {
+    new Provable(conclusion, subgoals, s)
+  }
+  final def apply(witnessed: List[Sequent]): Provable = {
+    new Provable(conclusion, subgoals, minSequent, witnessedFacts ++ witnessed)
+  }
   /**
     * Apply Rule: Apply given proof rule to the indicated subgoal of this Provable, returning the resulting Provable
     * {{{

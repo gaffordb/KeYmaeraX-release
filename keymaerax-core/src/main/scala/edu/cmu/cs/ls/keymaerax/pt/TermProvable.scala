@@ -69,6 +69,10 @@ trait ProvableSig {
     */
   def proved: Sequent
 
+  def minSequent: Sequent
+
+  def witnessedFacts: List[Sequent]
+
   /**
     * Apply Rule: Apply given proof rule to the indicated subgoal of this Provable, returning the resulting Provable
     * {{{
@@ -90,6 +94,11 @@ trait ProvableSig {
     * @requires(0 <= subgoal && subgoal < subgoals.length)
     */
   def apply(rule: Rule, subgoal: Subgoal): ProvableSig
+
+  def apply(s: Sequent): ProvableSig
+
+  def apply(witnessed: List[Sequent]): ProvableSig
+
 
   /**
     * Substitute subderivation as a proof of subgoal.
@@ -354,9 +363,12 @@ object ProvableSig {
   * A direct [[Provable]] straight from the core that does not keep track of its proof term.
   * Directly forwards all function calls to [[provable]].
   */
+
 case class ElidingProvable(provable: Provable) extends ProvableSig {
   override val conclusion: Sequent = provable.conclusion
   override val subgoals: IndexedSeq[Sequent] = provable.subgoals
+  override val minSequent: Sequent = provable.minSequent
+  override val witnessedFacts: List[Sequent] = provable.witnessedFacts
 
   override def proved: Sequent = provable.proved
 
@@ -364,6 +376,9 @@ case class ElidingProvable(provable: Provable) extends ProvableSig {
   override val rules: Map[String, ProvableSig] = ElidingProvable.rules
 
   override def apply(rule: Rule, subgoal: Subgoal): ProvableSig = ElidingProvable(provable(rule,subgoal), steps+1)
+
+  override def apply(s: Sequent): ProvableSig = ElidingProvable(provable(s), steps)
+  override def apply(witnessed: List[Sequent]): ProvableSig = ElidingProvable(provable(witnessed), steps)
 
   override def apply(subderivation: ProvableSig, subgoal: Subgoal): ProvableSig =
     ElidingProvable(provable(subderivation.underlyingProvable, subgoal), steps+subderivation.steps)
@@ -461,8 +476,14 @@ object TermProvable {
 case class TermProvable(provable: ProvableSig, pt: ProofTerm) extends ProvableSig with Logging {
   override val conclusion: Sequent = provable.conclusion
   override val subgoals: IndexedSeq[Sequent] = provable.subgoals
+  override val minSequent: Sequent = provable.minSequent
+  override val witnessedFacts: List[Sequent] = provable.witnessedFacts
 
   override def proved: Sequent = provable.proved
+
+  override def apply(s: Sequent): ProvableSig = ???
+
+  override def apply(witnessed: List[Sequent]): ProvableSig = ???
 
   override def apply(rule: Rule, subgoal: Subgoal): ProvableSig = {
     //@todo do a total pattern match on all rules in the core and produce individualized proof terms for each of them.

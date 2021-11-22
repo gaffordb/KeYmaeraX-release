@@ -52,6 +52,17 @@ object ArithmeticSimplification {
     else p
   })
 
+  @Tactic(names="Smart Hide All",
+    premises="Γ<sub>hide</sub> |- Δ<sub>hide</sub>",
+    //     smartHideAll -------------------------
+    conclusion="Γ |- Δ",
+    displayLevel="browse")
+  lazy val smartHideAll: BuiltInTactic = anon ( (p: ProvableSig) => {
+    assert(p.subgoals.length == 1, s"smartHideAll is only relevant to Provables with one subgoal; found ${p.subgoals.length} subgoals")
+
+    proveBy(p, smartHide & smartSuccHide)
+  })
+
   /** Simplifies arithmetic by removing formulas that are **probably** unprovable from the current facts.
     * Does not necessarily retain validity??? */
   lazy val smartSuccHide = new DependentTactic("smartSuccHide") {

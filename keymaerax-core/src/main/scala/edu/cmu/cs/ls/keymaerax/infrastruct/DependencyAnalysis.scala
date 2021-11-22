@@ -34,6 +34,10 @@ object DependencyAnalysis {
     (s.succ.map( f => freeVars(f)) ++ s.ante.map(f=>freeVars(f))).flatten.toSet
   }
 
+  def freeVars(fs: IndexedSeq[Formula]) : Set[BaseVariable] = {
+    (fs.map( f => freeVars(f))).flatten.toSet
+  }
+
   //Same as signature except it throws out everything except Function symbols
   def signature(t:Expression) : Set[Function] = {
     StaticSemantics.signature(t).flatMap( (e:Expression) =>
