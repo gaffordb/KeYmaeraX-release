@@ -18,6 +18,7 @@ import edu.cmu.cs.ls.keymaerax.pt.ProvableSig
 import edu.cmu.cs.ls.keymaerax.tools.ext.CounterExampleTool
 
 import scala.annotation.tailrec
+import scala.util.Try
 
 /**
   * Tactics for minimizing sequents.
@@ -36,16 +37,18 @@ object MinimizationLibrary {
     displayLevel = "browse")
   lazy val minQE: BuiltInTactic = anon((p: ProvableSig) => {
     assert(p.subgoals.length == 1, s"minQE requires Provables with one subgoal; found ${p.subgoals.length} subgoals")
-    val simplified = proveBy(p, smartHideAll)
+    val simplified = proveBy(p, unfoldProgramNormalizeProofless & smartHideAll)
 
     val weakenings = getWeakenings(simplified.subgoals.head)
+
+    // Right now, trying all possible weakenings. Really should do this more efficiently.
     val provableWeakenings = weakenings.map {
       case seq => proveBy(seq, QE)
     }.filter {
       case prov => prov.isProved
     }
 
-    val minSequent = provableWeakenings.minBy(x => x.proved.ante.length).proved
+    val minSequent = if(provableWeakenings.length > 0) provableWeakenings.minBy(x => x.proved.ante.length).proved else throw new TacticAssertionError("There should be a provable weakening (id)")
 
     proveBy(simplified, QE).apply(minSequent)
   })

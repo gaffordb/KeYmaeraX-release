@@ -382,8 +382,7 @@ final case class Sequent(ante: immutable.IndexedSeq[Formula], succ: immutable.In
   * }}}
   */
 final case class Provable private(conclusion: Sequent,
-                                  subgoals: immutable.IndexedSeq[Sequent],
-                                  minSequent: Sequent = null) {
+                                  subgoals: immutable.IndexedSeq[Sequent]) {
   /**
     * Position types for the subgoals of a Provable.
     */
@@ -405,10 +404,6 @@ final case class Provable private(conclusion: Sequent,
     */
   final def proved: Sequent =
     if (isProved) conclusion else throw new UnprovedException("Only Provables that have been proved have a proven conclusion", toString)
-
-  final def apply(s: Sequent): Provable = {
-    new Provable(conclusion, subgoals, s)
-  }
 
   /**
     * Apply Rule: Apply given proof rule to the indicated subgoal of this Provable, returning the resulting Provable
@@ -922,7 +917,7 @@ object Provable {
     * @see [[Sequent.toString]]
     */
   private def toExternalString(s: Sequent): String =
-  s.ante.map(store).mkString(" :: ") + (if (s.ante.isEmpty) "  ==>  " else "\n  ==>  ") + s.succ.map(store).mkString(" :: ")
+  if (s == null) "" else s.ante.map(store).mkString(" :: ") + (if (s.ante.isEmpty) "  ==>  " else "\n  ==>  ") + s.succ.map(store).mkString(" :: ")
 
   /** A fully parenthesized String representation of the given Provable for externalization.
     * @see [[Provable.toString()]]

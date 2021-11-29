@@ -162,6 +162,26 @@ object TactixLibrary extends HilbertCalculus
     SaturateTactic(OnAll(doStep(index)('R) | doStep(index)('L) | id | DLBySubst.safeabstractionb('R) | nil))
   }
 
+  /** Follow program structure when normalizing but avoid branching in typical safety problems (splits andR but nothing else).
+    * Don't apply id
+    * */
+  @Tactic(codeName = "unfoldProofless", longDisplayName = "Unfold Program Structure", revealInternalSteps = true)
+  val unfoldProgramNormalizeProofless: BelleExpr = anon {
+    //normalize(andR)
+
+    def index(isAnte: Boolean)(expr: Expression): Option[DerivationInfo] = (expr, isAnte) match {
+      case (f: Not, true) if f.isPredicateFreeFOL => None
+      case (f: Not, false) if f.isPredicateFreeFOL => None
+      case (f: And, false) if f.isPredicateFreeFOL => None
+      case (f: Imply, true) => if (f.isPredicateFreeFOL) None else Some(TacticInfo("autoMP"))
+      case (_: Or, true) => None
+      case (_: Equiv, _) => None
+      case _ => sequentStepIndex(isAnte)(expr)
+    }
+
+    SaturateTactic(OnAll(doStep(index)('R) | doStep(index)('L) | DLBySubst.safeabstractionb('R) | nil))
+  }
+
   @Tactic("chaseAt", longDisplayName = "Decompose", codeName = "chaseAt", revealInternalSteps = true)
   def chaseAtX: DependentPositionTactic = anon { (pos: Position, _: Sequent) => chaseAt(
     (isAnte: Boolean) => (expr: Expression) => (expr, isAnte) match {
