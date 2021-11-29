@@ -1,6 +1,7 @@
 package edu.cmu.cs.ls.keymaerax.hydra
 
 import edu.cmu.cs.ls.keymaerax.bellerophon.{BelleExpr, BelleTopLevelLabel, ExhaustiveSequentialInterpreter, LazySequentialInterpreter, Let, TacticInapplicableFailure}
+import edu.cmu.cs.ls.keymaerax.btactics.MinimizationLibrary.minQE
 import edu.cmu.cs.ls.keymaerax.btactics.{BelleLabels, Idioms, TacticTestBase}
 import edu.cmu.cs.ls.keymaerax.btactics.TactixLibrary._
 import edu.cmu.cs.ls.keymaerax.core.Sequent
@@ -81,7 +82,7 @@ class ProofTreeTests extends TacticTestBase {
     tree.root.children.head.makerShortName shouldBe Some("QE")
     tree.root.children.head shouldBe 'proved
     tree.locate("(1,0)").get.goal shouldBe tree.root.children.head.goal
-
+    print(tree.root.allWitnessedFacts)
     tree.root.provable.conclusion shouldBe Sequent(IndexedSeq(), IndexedSeq("x>0 -> x>0".asFormula))
     tree.root.provable.subgoals shouldBe empty
     tree.root.provable shouldBe 'proved
@@ -104,6 +105,7 @@ class ProofTreeTests extends TacticTestBase {
       have message "Position 1 does not point to a differential equation, but to [x:=x+1;]x>0"
     tree = DbProofTree(db.db, proofId.toString)
     tree.openGoals.loneElement.goal shouldBe Some("x>0 ==> [x:=x+1;]x>0".asSequent)
+    print(tree.root.allWitnessedFacts)
   }
 
   it should "create a proved tree from implyR ; QE" in withDatabase { db => withMathematica { _ =>
@@ -114,7 +116,7 @@ class ProofTreeTests extends TacticTestBase {
     tree.openGoals should have size 1
     tree.openGoals.head.runTactic("guest", ExhaustiveSequentialInterpreter(_, throwWithDebugInfo = false), implyR(1), "implyR", wait=true)
     tree = DbProofTree(db.db, proofId.toString)
-    tree.openGoals.head.runTactic("guest", ExhaustiveSequentialInterpreter(_, throwWithDebugInfo = false), QE, "QE", wait=true)
+    tree.openGoals.head.runTactic("guest", ExhaustiveSequentialInterpreter(_, throwWithDebugInfo = false), minQE, "minQE", wait=true)
 
     val rt = DbProofTree(db.db, proofId.toString)
     rt.nodes should have size 3
@@ -142,6 +144,8 @@ class ProofTreeTests extends TacticTestBase {
     rt.root.provable shouldBe 'proved
 
     rt shouldBe 'proved
+
+    print(tree.root.allWitnessedFacts)
 
     rt.tactic shouldBe implyR('R, "x>0 -> x>0".asFormula) & QE
   }}

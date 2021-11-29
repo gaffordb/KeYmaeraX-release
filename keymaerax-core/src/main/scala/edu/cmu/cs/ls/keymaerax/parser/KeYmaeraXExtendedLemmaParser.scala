@@ -5,9 +5,10 @@
 package edu.cmu.cs.ls.keymaerax.parser
 
 import edu.cmu.cs.ls.keymaerax.Logging
-import edu.cmu.cs.ls.keymaerax.core.Provable
+import edu.cmu.cs.ls.keymaerax.core.{Formula, Provable, Sequent}
 import edu.cmu.cs.ls.keymaerax.lemma.Evidence
 import edu.cmu.cs.ls.keymaerax.parser.KeYmaeraXLexer.TokenStream
+import edu.cmu.cs.ls.keymaerax.pt.ProvableSig
 import edu.cmu.cs.ls.keymaerax.tools.ToolEvidence
 
 import scala.annotation.tailrec
@@ -30,10 +31,10 @@ import scala.collection.immutable
   * @author Stefan Mitsch
   * @author Nathan Fulton
   */
-object KeYmaeraXExtendedLemmaParser extends (String => (Option[String], Provable, immutable.List[Evidence]))
+object KeYmaeraXExtendedLemmaParser extends (String => (Option[String], Provable, Sequent, immutable.List[Evidence]))
   with Logging {
   /** The lemma name, provable, and the supporting evidence */
-  private type Lemma = (Option[String], Provable, List[Evidence])
+  private type Lemma = (Option[String], Provable, Sequent, List[Evidence])
 
   /**
     * Returns the lemma parsed from `inputWithPossibleBOM` after removing the BOM.
@@ -59,28 +60,49 @@ object KeYmaeraXExtendedLemmaParser extends (String => (Option[String], Provable
   def parseLemma(input: TokenStream): Lemma = {
     require(input.last.tok == EOF, "Token streams have to end in " + EOF)
     require(input.head.tok.equals(LEMMA_BEGIN), "Expected ALP file to begin with Lemma block but found " + input.head)
-    val (nextLemma, nextFormula, nextEvidence, remainder) = parseNextLemma(input)
-    if (remainder.length == 1 && remainder.head.tok.equals(EOF)) (nextLemma, nextFormula, nextEvidence)
+    val (nextLemma, nextFormula, nextMinSequent, nextEvidence, remainder) = parseNextLemma(input)
+    if (remainder.length == 1 && remainder.head.tok.equals(EOF)) (nextLemma, nextFormula, nextMinSequent, nextEvidence)
     else throw new IllegalArgumentException("Expected only one lemma")
   }
 
-  /** Parses the next lemma from token stream `input` and returns the lemma as well as the remaining tokens. */
-  def parseNextLemma(input: TokenStream): (Option[String], Provable, List[Evidence], TokenStream) = {
-    require(input.head.tok == LEMMA_BEGIN, "Expected ALP file to begin with Lemma block")
-
-    val (name, nameRemainderTokens) = parseLemmaName(input)
-
-    // Find the End. token and exclude it
-    val (Token(DOUBLE_QUOTES_STRING(storedProvable), _) :: Nil, remainderTokens) = nameRemainderTokens.span(_.tok != END_BLOCK) match {
+  def parseProvableSig(input: TokenStream): (String, String, TokenStream) = {
+    val (Token(DOUBLE_QUOTES_STRING(storedProvableInternal), _) :: Token(DOUBLE_QUOTES_STRING(storedMinSeqInternal), _) :: Nil, remainderTokensInternal) = input.span(_.tok != END_BLOCK) match {
       case (Token(PERIOD, _) :: a, Token(END_BLOCK, _) :: Token(PERIOD, _) :: r) => (a, r)
       case (a, Token(END_BLOCK, _) :: Token(PERIOD, _) :: r) => (a, r)
       case (a, Token(END_BLOCK, _) :: r) => (a, r)
     }
+    (storedProvableInternal, storedMinSeqInternal, remainderTokensInternal)
+  }
+  def parseProvableSigOld(input: TokenStream): (String, String, TokenStream) = {
+    val (Token(DOUBLE_QUOTES_STRING(storedProvableInternal), _) :: Nil, remainderTokensInternal) = input.span(_.tok != END_BLOCK) match {
+      case (Token(PERIOD, _) :: a, Token(END_BLOCK, _) :: Token(PERIOD, _) :: r) => (a, r)
+      case (a, Token(END_BLOCK, _) :: Token(PERIOD, _) :: r) => (a, r)
+      case (a, Token(END_BLOCK, _) :: r) => (a, r)
+    }
+    (storedProvableInternal, "", remainderTokensInternal)
+  }
+
+  /** Parses the next lemma from token stream `input` and returns the lemma as well as the remaining tokens. */
+  def parseNextLemma(input: TokenStream): (Option[String], Provable, Sequent, List[Evidence], TokenStream) = {
+    require(input.head.tok == LEMMA_BEGIN, "Expected ALP file to begin with Lemma block")
+
+    val (name, nameRemainderTokens) = parseLemmaName(input)
+    //val (storedProvable, remainderTokens) = parseProvable(nameRemainderTokens)
+    val (storedProvable, storedMinSeq, remainderTokens) = try { parseProvableSigOld(nameRemainderTokens)} catch {case _ => parseProvableSig(nameRemainderTokens)}
+
+    var minSeq = Sequent(immutable.IndexedSeq(), immutable.IndexedSeq())
 
     val (allEvidence, remainder) = parseAllEvidence(remainderTokens)
     val provable = Provable.fromStorageString(storedProvable)
 
-    (name, provable, allEvidence, remainder)
+
+    if (!storedMinSeq.isEmpty) {
+      val msinput = ParserHelper.removeBOM(storedMinSeq)
+      val mstokens = KeYmaeraXLexer.inMode(msinput, LemmaFileMode)
+      minSeq = edu.cmu.cs.ls.keymaerax.parser.KeYmaeraXStoredProvableParser.parseSequent(mstokens)
+    }
+
+    (name, provable, minSeq, allEvidence, remainder)
   }
 
   /** Parses the lemma name. Returns the lemma name (None if empty) and the token remainders. */

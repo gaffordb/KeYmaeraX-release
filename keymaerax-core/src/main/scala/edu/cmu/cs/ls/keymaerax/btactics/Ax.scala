@@ -115,7 +115,7 @@ object Ax extends Logging {
         }
     }
     require(fact.isProved, "only proved Provables would be accepted as derived axioms: " + name + " got\n" + fact)
-    val npt = ElidingProvable(fact.underlyingProvable)
+    val npt = ElidingProvable(fact.underlyingProvable, fact.minSequent)
     val alternativeFact =
       if (ProvableSig.PROOF_TERMS_ENABLED) {
         TermProvable(npt, AxiomTerm(lemmaName))

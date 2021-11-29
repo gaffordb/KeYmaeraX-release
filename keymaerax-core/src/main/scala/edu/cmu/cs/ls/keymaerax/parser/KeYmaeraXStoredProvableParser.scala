@@ -41,7 +41,7 @@ object KeYmaeraXStoredProvableParser extends (String => immutable.List[Sequent])
   } ensures (r => r.size == 1 + input.count(_.tok == FROM))
 
   /** Parses a sequent. */
-  private def parseSequent(input: TokenStream): Sequent = {
+   def parseSequent(input: TokenStream): Sequent = {
     val (anteTokens, Token(TURNSTILE, _) :: succTokens) = input.span(_.tok != TURNSTILE)
     Sequent(parseFormulas(anteTokens), parseFormulas(succTokens))
   } ensures (r => {

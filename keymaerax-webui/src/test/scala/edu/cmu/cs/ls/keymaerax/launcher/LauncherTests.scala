@@ -45,7 +45,7 @@ class LauncherTests extends TacticTestBase {
     val exported = KeYmaeraXExtendedLemmaParser(managed(scala.io.Source.fromFile(outputFileName)).apply(_.mkString))
     exported._2.conclusion shouldBe Sequent(IndexedSeq(), IndexedSeq(conjecture.expandedModel.asInstanceOf[Formula]))
     val ("tool", "KeYmaera X") :: ("model", model) :: ("tactic", tactic) :: ("proof", proof) :: Nil =
-      exported._3.loneElement.asInstanceOf[ToolEvidence].info
+      exported._4.loneElement.asInstanceOf[ToolEvidence].info
     ArchiveParser.parser(model).loneElement.expandedModel shouldBe conjecture.expandedModel
     tactic shouldBe "master"
     proof shouldBe empty // proof term not exported
@@ -93,7 +93,7 @@ class LauncherTests extends TacticTestBase {
       val conjecture = conjectures(i)
       exported._2.conclusion shouldBe Sequent(IndexedSeq(), IndexedSeq(conjecture.expandedModel.asInstanceOf[Formula]))
       val ("tool", "KeYmaera X") :: ("model", model) :: ("tactic", tactic) :: ("proof", proof) :: Nil =
-        exported._3.loneElement.asInstanceOf[ToolEvidence].info
+        exported._4.loneElement.asInstanceOf[ToolEvidence].info
       val entry = ArchiveParser.parser(model).loneElement
       entry.name shouldBe conjecture.name
       entry.expandedModel shouldBe conjecture.expandedModel

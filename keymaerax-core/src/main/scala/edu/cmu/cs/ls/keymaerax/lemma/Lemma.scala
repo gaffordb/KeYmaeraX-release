@@ -53,9 +53,10 @@ object Lemma {
 
   /** Parses a lemma from its string representation (without consistency checking). */
   private def fromStringInternal(lemma: String): Lemma = {
-    val (name, provable, evidence) = KeYmaeraXExtendedLemmaParser(lemma)
+    val (name, provable, minSeq, evidence) = KeYmaeraXExtendedLemmaParser(lemma)
     val fact =
       if (ProvableSig.PROOF_TERMS_ENABLED) {
+        throw new ProverException("proof terms enabled not defined")
         TermProvable(ElidingProvable(provable), name match { case Some(n) =>
           DerivedAxiomInfo.allInfo.get(n) match {
             case Some(info) => AxiomTerm(info.canonicalName)
@@ -65,7 +66,7 @@ object Lemma {
           }
         case None => FOLRConstant(provable.conclusion.succ.head) })
       } else {
-        ElidingProvable(provable)
+        ElidingProvable(provable, minSeq)
       }
     Lemma(fact, evidence, name) //@todo also load proof terms.
   }
@@ -127,7 +128,8 @@ final case class Lemma(fact: ProvableSig, evidence: immutable.List[Evidence], na
     val reparsed = Lemma.fromStringInternal(r)
     reparsed.fact.underlyingProvable == fact.underlyingProvable &&
     reparsed.evidence == evidence &&
-    reparsed.name == name
+    reparsed.name == name &&
+    reparsed.fact.minSequent == reparsed.fact.minSequent
     },
     "Printed lemma should reparse to this original lemma\n\n" + toStringInternal)
 
@@ -136,6 +138,7 @@ final case class Lemma(fact: ProvableSig, evidence: immutable.List[Evidence], na
   private def toStringInternal: String = {
     "Lemma \"" + name.getOrElse("") + "\".\n" +
       "\"" + Provable.toStorageString(fact.underlyingProvable) + "\"\n" +
+      "\"" + ""/*UNDOMEProvable.toExternalString(fact.minSequent)*/ + "\"\n" +
       "End.\n" +
       evidence.mkString("\n\n") + "\n"
   }

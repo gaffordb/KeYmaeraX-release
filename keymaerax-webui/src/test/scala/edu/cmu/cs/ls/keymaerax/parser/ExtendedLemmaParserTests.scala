@@ -8,15 +8,17 @@ import edu.cmu.cs.ls.keymaerax.lemma.{Lemma, LemmaDB, LemmaDBFactory}
 import edu.cmu.cs.ls.keymaerax.parser.StringConverter._
 import edu.cmu.cs.ls.keymaerax.pt.ProvableSig
 import edu.cmu.cs.ls.keymaerax.tools.ToolEvidence
+import org.scalatest.Ignore
 
 import scala.collection.immutable.IndexedSeq
-
 import org.scalatest.LoneElement._
 import org.scalatest.Inside._
 
 /**
   * @author Nathan Fulton
   */
+
+/* IGNORE because I changed the StoredLemma structure to include minSequent... Sorry! */
 class ExtendedLemmaParserTests extends TacticTestBase {
 
   "Extended Lemma Parser" should "work" in {
@@ -28,6 +30,7 @@ class ExtendedLemmaParserTests extends TacticTestBase {
     val lemmaFile =
       s"""Lemma "MyLemma".
           |"$storedProvable"
+          |""
           |End.
           |$tool
           |$kyxversion""".stripMargin
@@ -166,7 +169,7 @@ class ExtendedLemmaParserTests extends TacticTestBase {
     parseResult._1 shouldBe Some("MyLemma")
     parseResult._2.subgoals.loneElement shouldBe sequent
     parseResult._2.conclusion shouldBe sequent
-    parseResult._3.length shouldBe 2
+    parseResult._4.length shouldBe 2
   }
 
   it should "parse multi-evidence lemma correctly" in {
@@ -184,7 +187,7 @@ class ExtendedLemmaParserTests extends TacticTestBase {
     parseResult._1 shouldBe Some("MyLemma")
     parseResult._2.subgoals.loneElement shouldBe sequent
     parseResult._2.conclusion shouldBe sequent
-    parseResult._3.length shouldBe 2
+    parseResult._4.length shouldBe 2
   }
 
   it should "parse lemma without evidence correctly in compatibility mode" in {
@@ -204,7 +207,7 @@ class ExtendedLemmaParserTests extends TacticTestBase {
 
       parseResult._1 shouldBe Some("MyLemma")
       parseResult._2.conclusion shouldBe "==> 1=1".asSequent
-      parseResult._3 shouldBe empty
+      parseResult._4 shouldBe empty
     }
   }
 
@@ -216,7 +219,7 @@ class ExtendedLemmaParserTests extends TacticTestBase {
           |End.
           |$tool""".stripMargin
     val parseResult = KeYmaeraXExtendedLemmaParser(lemmaFile)
-    parseResult._3.filter(x => x.isInstanceOf[ToolEvidence]).exists(x => x.asInstanceOf[ToolEvidence].info.exists(p => p._1 == "kyxversion"))
+    parseResult._4.filter(x => x.isInstanceOf[ToolEvidence]).exists(x => x.asInstanceOf[ToolEvidence].info.exists(p => p._1 == "kyxversion"))
   }
 
   it should "add to sql db" ignore {
@@ -266,7 +269,7 @@ class ExtendedLemmaParserTests extends TacticTestBase {
       | kyxversion $q 4.9.3 $q
       | End.""".stripMargin
 
-    val (name, p, evidence) = KeYmaeraXExtendedLemmaParser(content)
+    val (name, p, _, evidence) = KeYmaeraXExtendedLemmaParser(content)
     name should contain ("user/TheLemma")
     p.conclusion shouldBe "==> S(x) -> [?!S(x);]P(x)".asSequent
     evidence should have size 2
