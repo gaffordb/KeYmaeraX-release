@@ -7,6 +7,7 @@ package edu.cmu.cs.ls.keymaerax.hydra
 import edu.cmu.cs.ls.keymaerax.Logging
 import edu.cmu.cs.ls.keymaerax.bellerophon._
 import edu.cmu.cs.ls.keymaerax.bellerophon.parser.BelleParser
+import edu.cmu.cs.ls.keymaerax.btactics.TactixLibrary.{proveBy, unfoldProgramNormalizeProofless}
 import edu.cmu.cs.ls.keymaerax.btactics._
 import edu.cmu.cs.ls.keymaerax.infrastruct.Augmentors._
 import edu.cmu.cs.ls.keymaerax.core.{Box, Expression, Formula, FuncOf, Loop, ODESystem, PredOf, Sequent, StaticSemantics, SubstitutionClashException, SubstitutionPair, USubst, Variable}
@@ -18,7 +19,7 @@ import edu.cmu.cs.ls.keymaerax.pt.ProvableSig
 import edu.cmu.cs.ls.keymaerax.tacticsinterface.TraceRecordingListener
 
 import scala.annotation.tailrec
-import scala.collection.immutable.{List, Map}
+import scala.collection.immutable.{IndexedSeq, List, Map}
 import scala.util.Try
 
 trait ProofTreeNodeId {}
@@ -75,7 +76,18 @@ trait ProofTreeNode {
   /** All direct and indirect descendants of this node. */
   def allDescendants: List[ProofTreeNode] = theDescendants
 
-  def allWitnessedFacts: List[Formula] = allDescendants.flatMap(x => x.conclusion.ante)
+  /** Every fact that was witnessed at each explicit proof step */
+  def allWitnessedFacts: List[Formula] = allDescendants.flatMap(x =>
+    proveBy(Sequent(x.conclusion.ante, x.conclusion.succ),
+      unfoldProgramNormalizeProofless).subgoals.flatMap(y => y.ante ++ y.succ))
+
+  /** Every fact that was used to close some branch. Note: Only works for minQE and minAuto */
+  def allUsedFacts: Sequent = allDescendants
+    .map(x=>if (x.numSubgoals == 0) x.localProvable.minSequent else Sequent(IndexedSeq[Formula](), IndexedSeq[Formula]()))
+    .foldRight(Sequent(IndexedSeq[Formula](), IndexedSeq[Formula]()))((acc:Sequent,s:Sequent) => acc.glue(s))
+
+  /** Everything that was witnessed but wasn't used */
+  def allUnusedFacts: List[Formula] = allWitnessedFacts.filter(x=> !(allUsedFacts.succ ++ allUsedFacts.ante).contains(x))
 
   /** All direct and indirect ancestors of this node. */
   def allAncestors: List[ProofTreeNode] = theAncestors

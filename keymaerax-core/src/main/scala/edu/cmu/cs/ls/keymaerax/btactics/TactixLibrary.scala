@@ -167,18 +167,18 @@ object TactixLibrary extends HilbertCalculus
     * */
   @Tactic(codeName = "unfoldProofless", longDisplayName = "Unfold Program Structure", revealInternalSteps = true)
   val unfoldProgramNormalizeProofless: BelleExpr = anon {
-    //normalize(andR)
 
     def index(isAnte: Boolean)(expr: Expression): Option[DerivationInfo] = (expr, isAnte) match {
       case (f: Not, true) if f.isPredicateFreeFOL => None
       case (f: Not, false) if f.isPredicateFreeFOL => None
       case (f: And, false) if f.isPredicateFreeFOL => None
-      case (f: Imply, true) => if (f.isPredicateFreeFOL) None else Some(TacticInfo("autoMP"))
+      case (f: Imply, true) if f.isPredicateFreeFOL => None
       case (_: Or, true) => None
       case (_: Equiv, _) => None
       case _ => sequentStepIndex(isAnte)(expr)
     }
 
+    // Don't do safeabstractionb, because it'll do work for us. maybe for optimizations this makes sense later
     SaturateTactic(OnAll(doStep(index)('R) | doStep(index)('L) | DLBySubst.safeabstractionb('R) | nil))
   }
 
@@ -692,6 +692,9 @@ object TactixLibrary extends HilbertCalculus
     }
   }
   lazy val QE: BelleExpr = QEX(None, None)
+
+  @Tactic("QEshort", codeName = "QEshort", revealInternalSteps = true)
+  lazy val QEshort: BelleExpr = QEX(None, Option(Number(2)))
 
   /** Quantifier elimination returning equivalent result, irrespective of result being valid or not.
     * Performs QE and allows the goal to be reduced to something that isn't necessarily true.

@@ -405,7 +405,7 @@ object KeYmaeraXLexer extends (String => List[Token]) with Logging {
 
   /** Replace all instances of LPAREN,ANYTHING,RPAREN with LBANANA,RBANANA. */
   @tailrec
-  private def replaceAnything(output: scala.collection.mutable.ListBuffer[Token]): scala.collection.mutable.ListBuffer[Token] = {
+  final def replaceAnything(output: scala.collection.mutable.ListBuffer[Token]): scala.collection.mutable.ListBuffer[Token] = {
     output.find(x => x.tok == ANYTHING) match {
       case None => output
       case Some(anyTok) =>
@@ -755,4 +755,18 @@ object KeYmaeraXLexer extends (String => List[Token]) with Logging {
 
       (namePart, idx)
     } else (s, None)
+
+  /** Drop domain constriants from ODEs: {... & Q1 & Q2 & Q3}. */
+    /* TODO fixme */
+  @tailrec
+  final def dropDomainConstraints(input: TokenStream): TokenStream = {
+    input.find(x => x.tok == ANYTHING) match {
+      case None => input
+      case Some(anyTok) =>
+        val pos = input.indexOf(anyTok)
+        dropDomainConstraints(input.patch(pos-1, Token(LBRACE, anyTok.loc) :: Token(RBRACE, anyTok.loc) :: Nil, 3))
+    }
+  }
 }
+
+

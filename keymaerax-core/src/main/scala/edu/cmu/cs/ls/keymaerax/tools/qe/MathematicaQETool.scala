@@ -62,7 +62,6 @@ class MathematicaQETool(val link: MathematicaCommandRunner) extends QETool {
       case ex: ConversionException => throw ex
       case ex: Throwable => throw ConversionException("Error converting to Mathematica: " + formula.prettyString, ex)
     }
-    println(f);
     val doQE = qeMethod match {
       case "Reduce" => (f: MathematicaConversion.MExpr) => reduce(f, list(), reals.op)
       case "Resolve" => (f: MathematicaConversion.MExpr) => resolve(f, reals.op)

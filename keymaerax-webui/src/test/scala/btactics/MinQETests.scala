@@ -38,6 +38,7 @@ class MinQETests extends TacticTestBase {
   "QE Hider: QE for id" should "output used arguments" taggedAs IgnoreInBuildTest in withMathematica { qeTool =>
     val seq = "x>0 & y>0 \n  ==> x>0".asSequent
     println("Before" + seq.prettyString)
+
     val pr = proveBy(seq,minQE)
     println("After" + pr.prettyString)
     println("MinSeq: " + pr.minSequent)

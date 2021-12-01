@@ -1,7 +1,7 @@
 package edu.cmu.cs.ls.keymaerax.hydra
 
 import edu.cmu.cs.ls.keymaerax.bellerophon._
-import edu.cmu.cs.ls.keymaerax.btactics.MinimizationLibrary.minQE
+import edu.cmu.cs.ls.keymaerax.btactics.MinimizationLibrary.{minAuto, minQE}
 import edu.cmu.cs.ls.keymaerax.btactics.TactixLibrary._
 import edu.cmu.cs.ls.keymaerax.btactics.macros._
 import edu.cmu.cs.ls.keymaerax.btactics.{BelleLabels, Idioms, TacticTestBase}
@@ -138,12 +138,29 @@ class WitnessedFactsTests extends TacticTestBase {
 
     rt shouldBe 'proved
 
-    print("All witnessed facts: " + tree.root.allWitnessedFacts)
-    print("All used facts: " + tree.root.allDescendants
-      .map(x=>if (x.numSubgoals == 0) x.localProvable.minSequent else Sequent(IndexedSeq[Formula](), IndexedSeq[Formula]()))
-      .foldRight(Sequent(IndexedSeq[Formula](), IndexedSeq[Formula]()))((acc:Sequent,s:Sequent) => acc.glue(s)))
-    print("All unused facts: " + "TODO")
+    println("All witnessed facts: " + tree.root.allWitnessedFacts)
+    println("All used facts: " + tree.root.allUsedFacts)
+    println("All unused facts: " + tree.root.allUnusedFacts)
 
     rt.tactic shouldBe implyR('R, "x>0 & y>0 -> x>0".asFormula) & minQE
+  }}
+
+  it should "get unused facts" in withDatabase { db => withMathematica { _ =>
+    val modelContent = "Definitions      /* function symbols cannot change their value */\n  Real H;        /* initial height */\n  Real g;        /* gravity */\n  Real c;        /* damping coefficient */\nEnd.\n\nProgramVariables /* program variables may change their value over time */\n  Real x, v;     /* height and velocity */\nEnd.\n\nProblem\n  x>=0 & x=H\n  & v=0 & g>0 & 1>=c&c>=0\n ->\n  [\n      {x'=v,v'=-g}\n      {?x=0; v:=-c*v;  ++  ?x>=0;}\n  ] (x>=0 & x<=H)\nEnd."
+    val proofId = db.createProof(modelContent)
+
+    var tree = DbProofTree(db.db, proofId.toString)
+    tree.openGoals should have size 1
+    tree.openGoals.head.runTactic("guest", ExhaustiveSequentialInterpreter(_, throwWithDebugInfo = false), minAuto, "minAuto", wait=true)
+    tree = DbProofTree(db.db, proofId.toString)
+    val rt = DbProofTree(db.db, proofId.toString)
+
+    rt.root.provable shouldBe 'proved
+
+    rt shouldBe 'proved
+
+    println("All witnessed facts: " + tree.root.allWitnessedFacts)
+    println("All used facts: " + tree.root.allUsedFacts)
+    println("All unused facts: " + tree.root.allUnusedFacts)
   }}
 }

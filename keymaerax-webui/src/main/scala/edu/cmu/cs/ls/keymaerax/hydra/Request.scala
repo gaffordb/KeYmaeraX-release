@@ -2140,6 +2140,19 @@ class GetStepRequest(db: DBAbstraction, userId: String, proofId: String, nodeId:
   }
 }
 
+class GetUnusedFactsRequest(db: DBAbstraction, userId: String, proofId: String)
+
+  extends UserProofRequest(db, userId, proofId) with ReadRequest {
+  override protected def doResultingResponses(): List[Response] = {
+    val tree = DbProofTree(db, proofId)
+    // todo make this unused
+    val unused = tree.root.allUsedFacts
+    ???
+    //ApplicableAxiomsResponse(unused, Map.empty, true)
+
+  }
+}
+
 class GetLemmasRequest(db: DBAbstraction, userId: String, proofId: String, nodeId: String, pos: Position,
                         partialLemmaName: String) extends UserProofRequest(db, userId, proofId) with ReadRequest {
   override protected def doResultingResponses(): List[Response] = {

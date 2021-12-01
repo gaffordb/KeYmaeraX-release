@@ -159,6 +159,15 @@ object FormulaTools extends Logging {
     case _ => throw new IllegalArgumentException("atomicFormulas of formula " + formula + " not implemented")
   }
 
+  /*def moreConstrainedThan(p1: Program, p2: Program): Boolean = {
+
+    (p1,p2) match {
+      case (l1, l2) if l1 == l2 => true
+
+      case (Choice(l1,r1), Choice(l2, r2)) => l1 ==
+      case (l1, l2) =>
+    }
+  }*/
   /**
    * Returns the polarity of the subformula at position pos in formula.
    * @param formula The formula.
