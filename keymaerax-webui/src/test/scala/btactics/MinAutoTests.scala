@@ -1,7 +1,7 @@
 package btactics
 
 import edu.cmu.cs.ls.keymaerax.btactics.ArithmeticSimplification.smartHideAll
-import edu.cmu.cs.ls.keymaerax.btactics.MinimizationLibrary.{formulaSimplifications, isWeaker, minAuto, minQE}
+import edu.cmu.cs.ls.keymaerax.btactics.MinimizationLibrary.{entails, formulaSimplifications, getQEWeakenings, isWeaker, minAuto, minQE, stripModalities}
 import edu.cmu.cs.ls.keymaerax.btactics.TactixLibrary.{master, unfoldProgramNormalizeProofless}
 import edu.cmu.cs.ls.keymaerax.btactics._
 import edu.cmu.cs.ls.keymaerax.core.{Box, Choice, Expression, Formula, Imply, ODESystem, Program, Sequent, Test, True}
@@ -12,6 +12,7 @@ import edu.cmu.cs.ls.keymaerax.parser.StringConverter._
 import testHelper.KeYmaeraXTestTags.IgnoreInBuildTest
 import edu.cmu.cs.ls.keymaerax.infrastruct.Augmentors.{FormulaAugmentor, ProgramAugmentor}
 
+import scala.collection.immutable.IndexedSeq
 import scala.collection.mutable.ListBuffer
 
 /**
@@ -87,15 +88,100 @@ class MinAutoTests extends TacticTestBase {
 
 
   "Subformulas" should "output used arguments" taggedAs IgnoreInBuildTest in withMathematica { qeTool =>
-    val seq1 = "==> [{x'=1&x>2&y>2}]x>=0".asSequent
-    val seq2 = "==> [{x'=1&x>2}]x>=0".asSequent
+    val s1 = " ==> [{x'=1&x>2&y>2}]x>=0".asSequent
+    val s2 = " ==> [{x'=1&x>2}]x>=0".asSequent
+
+    val s3 = "==> y<1 & x<2".asSequent
+    val s4 = "==> y<1".asSequent
     //val seq1Atomic = proveBy(Sequent(scala.collection.immutable.IndexedSeq(), scala.collection.immutable.IndexedSeq(seq1)),
     //  unfoldProgramNormalizeProofless).subgoals
     //val seq2Atomic = atomicFormulas(seq2)
 
+    val w1 = isWeaker(s1, s2)
 
+    isWeaker(s1, s2) shouldBe false
+    isWeaker(s3, s4) shouldBe true
+    isWeaker(s2, s1) shouldBe true
+    isWeaker(s4, s3) shouldBe false
 
-    println("seq1 < seq2 ? " + isWeaker(seq1, seq2))
+    //val pr = proveBy(seq, minAuto)
+    //println("After" + pr.prettyString)
+    //println("MinSeq: " + pr.minSequent)
+  }
+
+  "Test is weaker with random formulas" should "output used arguments" taggedAs IgnoreInBuildTest in withMathematica { qeTool =>
+    val formula_generator = new RandomFormula()
+
+    val fml = formula_generator.nextFormula(1)
+
+    /* */
+    1 to 10 foreach { _ =>
+      val seq = Sequent(IndexedSeq(), IndexedSeq(formula_generator.nextFormula(3)))
+        //val seq = Sequent(IndexedSeq(), IndexedSeq(fml))
+        println("seq: " + seq)
+        assert(isWeaker(seq, seq))
+    }
+  }
+
+  "Test QE weakenings" should "output used arguments" taggedAs IgnoreInBuildTest in withMathematica { qeTool =>
+    val formula_generator = new RandomFormula(1)
+
+    1 to 1000 foreach { _ =>
+      // nextSequent kinda gives junk values, so build sequents manually instead
+      // val seq = formula_generator.nextSequent(3)
+
+      val seq = Sequent(IndexedSeq(formula_generator.nextFormula(5)), IndexedSeq(formula_generator.nextFormula(5)))
+      println("Random Sequent: ", seq)
+      val validSucc = seq.succ.headOption match {
+        case Some(x) => {
+          x
+        }
+        case _ => "x=1".asFormula
+      }
+      val validSeq = Sequent(seq.ante, IndexedSeq(validSucc))
+      println("Valid Sequent: " + validSeq)
+      getQEWeakenings(Sequent(validSeq.ante, validSeq.succ)) foreach { seqSimp =>
+          println("Simplification: " + seqSimp)
+          try {
+            assert(isWeaker(seqSimp, validSeq))
+          }
+          catch {
+            case e: IllegalArgumentException => if(!(e.toString.contains("Args must be provable through auto."))) {print("e: " + e.toString); throw e}
+          }
+        }
+      }
+      //val seq = Sequent(IndexedSeq(), IndexedSeq(fml))
+      //println("seq: " + seq)
+      //assert(isWeaker(seq, seq))
+
+  }
+
+  "Strip modalities" should "output used arguments" taggedAs IgnoreInBuildTest in withMathematica { qeTool =>
+    val s1 = "x=0 & [{x'=1&x>2&y>2}]x>=0".asFormula
+    val s2 = "[{x'=1&x>2}]x>=0".asFormula
+    val s3 = "y<1 & x<2".asFormula
+    val s4 = "y<1".asFormula
+
+    println(stripModalities(s1))
+    println(stripModalities(s2))
+    println(stripModalities(s3))
+    println(stripModalities(s4))
+
+    //val pr = proveBy(seq, minAuto)
+    //println("After" + pr.prettyString)
+    //println("MinSeq: " + pr.minSequent)
+  }
+
+  "Test formula simplifications" should "output used arguments" taggedAs IgnoreInBuildTest in withMathematica { qeTool =>
+    val s1 = "x=0 & [{x'=1&x>2&y>2}]x>=0".asFormula
+    val s2 = "x<1 & y=1 | y=2".asFormula
+    val s3 = "y<1 & x<2".asFormula
+    val s4 = "y<1".asFormula
+
+    println(stripModalities(s1))
+    println(stripModalities(s2))
+    println(stripModalities(s3))
+    println(stripModalities(s4))
 
     //val pr = proveBy(seq, minAuto)
     //println("After" + pr.prettyString)

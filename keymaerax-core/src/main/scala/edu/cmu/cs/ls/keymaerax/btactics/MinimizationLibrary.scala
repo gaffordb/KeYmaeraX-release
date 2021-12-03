@@ -5,6 +5,15 @@
 
 package edu.cmu.cs.ls.keymaerax.btactics
 
+// In order to evaluate tasks, we'll need a Scheduler
+import monix.execution.Scheduler.Implicits.global
+
+// A Future type that is also Cancelable
+import monix.execution.CancelableFuture
+
+// Task is in monix.eval
+import monix.eval.Task
+
 import edu.cmu.cs.ls.keymaerax.bellerophon._
 import edu.cmu.cs.ls.keymaerax.btactics.TacticFactory._
 import edu.cmu.cs.ls.keymaerax.btactics.ArithmeticSimplification.{smartHide, smartHideAll, smartSuccHide}
@@ -12,9 +21,9 @@ import edu.cmu.cs.ls.keymaerax.btactics.TactixLibrary._
 import edu.cmu.cs.ls.keymaerax.btactics.macros.Tactic
 import edu.cmu.cs.ls.keymaerax.core.{Formula, _}
 import edu.cmu.cs.ls.keymaerax.infrastruct.Augmentors._
-import edu.cmu.cs.ls.keymaerax.infrastruct.ExpressionTraversal.ExpressionTraversalFunction
+import edu.cmu.cs.ls.keymaerax.infrastruct.ExpressionTraversal.{ExpressionTraversalFunction, stop}
 import edu.cmu.cs.ls.keymaerax.infrastruct.FormulaTools.atomicFormulas
-import edu.cmu.cs.ls.keymaerax.infrastruct.{AntePosition, ExpressionTraversal, PosInExpr, Position, SuccPosition}
+import edu.cmu.cs.ls.keymaerax.infrastruct.{AntePosition, ExpressionTraversal, FormulaTools, PosInExpr, Position, SuccPosition}
 import edu.cmu.cs.ls.keymaerax.parser.KeYmaeraXLexer.TokenStream
 import edu.cmu.cs.ls.keymaerax.parser._
 import edu.cmu.cs.ls.keymaerax.parser.{AMP, LBRACE, RBRACE}
@@ -26,7 +35,10 @@ import scala.annotation.tailrec
 import scala.collection.immutable.Nil
 import scala.collection.mutable.ListBuffer
 import scala.collection.parallel.immutable
-import scala.util.Try
+import scala.collection.immutable.IndexedSeq
+import scala.concurrent.duration.{Duration, DurationInt}
+import scala.concurrent.{Await, ExecutionContext, Future, TimeoutException}
+import scala.util.{Failure, Success, Try}
 
 /**
   * Tactics for minimizing sequents.
@@ -44,6 +56,8 @@ object MinimizationLibrary {
     conclusion = "Γ |- Δ",
     displayLevel = "browse")
   lazy val minQE: BuiltInTactic = anon((p: ProvableSig) => {
+    val proved = proveBy(p, QEshort)
+    assert(proved.isProved, s"minQE requires a Provable that can be proved (within 5 seconds) by QE")
     assert(p.subgoals.length == 1, s"minQE requires Provables with one subgoal; found ${p.subgoals.length} subgoals")
     val simplified = proveBy(p, unfoldProgramNormalizeProofless & smartHideAll)
 
@@ -57,14 +71,15 @@ object MinimizationLibrary {
     }
 
     val minSequent = if(provableWeakenings.length > 0) {
-      provableWeakenings.foldLeft(provableWeakenings.head)((x,y) => if (isWeaker(x.proved, y.proved)) x else y).proved
+      provableWeakenings.foldLeft(provableWeakenings.head)((x,y) => if (entails(x.proved, y.proved)) x else y).proved
     } else throw new TacticAssertionError("There should be a provable weakening (id)")
 
     println("MinSequent: ", minSequent)
-    proveBy(simplified, QE).apply(minSequent)
+    proved.apply(minSequent)
   })
 
   def getAssumptionWeakenings(original: Sequent): List[Sequent] = {
+
     // Get all possible sets of sequents
     val candidates = (0 to original.ante.length) flatMap original.ante.combinations
 
@@ -106,11 +121,10 @@ object MinimizationLibrary {
           case c => Left(None)
         }
         // NOTE TODO negation over everything might mess things up?
-
+        // kind of need things of the form `preconditions -> [ctrl;plant]postconditions`
         override def preF(p: PosInExpr, e: Formula): Either[Option[ExpressionTraversal.StopTraversal], Formula] = e match {
-          case Imply(pre, Box(prog,f)) => fmls.appendAll(formulaSimplifications(pre)); Left(None);
+          case Imply(pre, Box(prog, f)) => fmls.appendAll(formulaSimplifications(pre).map(simp => formAug.replaceAt(p, Imply(simp, Box(prog,f))))); Left(None);
           case c => Left(None)
-
         }
       }, fml)
     }
@@ -119,27 +133,61 @@ object MinimizationLibrary {
   }
 
   def formulaSimplifications(f: Formula): List[Formula] = {
-    proveBy(Sequent(scala.collection.immutable.IndexedSeq(f),scala.collection.immutable.IndexedSeq()), unfoldProgramNormalizeProofless)
-      .subgoals.flatMap(x=> getAssumptionWeakenings(x))
-      .map{ seq => anteToFormula(seq) }.toList
+    getAssumptionWeakenings(Sequent(IndexedSeq(f), IndexedSeq()))
+      .map{ seq => anteToFormula(seq) }
   }
 
-  /* Note: This doesn't work in general, but is correct under our mutations */
-  def isWeaker(s1: Sequent, s2: Sequent): Boolean = {
-    val fmls1 = ListBuffer[Formula]()
-    val fmls2 = ListBuffer[Formula]()
+  def getProgramConstraints(fml: Formula) = {
+    val constraints = ListBuffer[Formula]()
 
-    // Collect constraints from s1
-    {s1.ante++s1.succ}.foreach { fml =>
-      ExpressionTraversal.traverse(new ExpressionTraversalFunction() {
-        override def preP(p: PosInExpr, e: Program): Either[Option[ExpressionTraversal.StopTraversal], Program] = e match {
-          case Test(q) if q != True => fmls1.append(q); Left(None);
-          case ODESystem(_, q) if q != True => fmls1.append(q); Left(None);
+    ExpressionTraversal.traverse(new ExpressionTraversalFunction() {
+      override def preP(p: PosInExpr, e: Program): Either[Option[ExpressionTraversal.StopTraversal], Program] = e match {
+          case Test(q) if q != True => constraints.append(q); Left(None);
+          case ODESystem(_, q) if q != True => constraints.append(q); Left(None);
           case c => Left(None)
         }
       }, fml)
+    constraints
+  }
+
+  /** Strip the modality parts of the formula, keep the postconditions. */
+  def stripModalities(fml: Formula): Formula = {
+    var faug = FormulaAugmentor(fml)
+     ExpressionTraversal.traverse(new ExpressionTraversalFunction() {
+        override def preF(p: PosInExpr, e: Formula): Either[Option[ExpressionTraversal.StopTraversal], Formula] = e match {
+          case Box(_, f) => faug = FormulaAugmentor(stripModalities(faug.replaceAt(p, f))); Left(Some(stop));
+          case Diamond(_, f) => faug = FormulaAugmentor(stripModalities(faug.replaceAt(p, f))); Left(Some(stop));
+          case c => Left(None)
+        }
+      }, fml)
+    faug.fml
+  }
+
+  /** What we _really_ want is `entails` (as defined below), but auto is not powerful enough to prove many of the
+    * weakenings (which we know to be sound). This function will determine which sequent has been weakened (by our mutations)
+    * more than the others. Used internally to detect which is Sequent is the minSequent which we want to keep.  */
+  /** Note: This doesn't work in general, but is correct under our mutations */
+  def isWeaker(s1: Sequent, s2: Sequent): Boolean = {
+    assert(s1.succ.length == 1 && s2.succ.length == 1, s"We have not reasoned about Sequents with multiple succedents yet.")
+    if(!proveBy(s1, master()).isProved || !proveBy(s2, master()).isProved) {
+    throw new IllegalArgumentException("Args must be provable through auto.")
     }
 
+    val ante1 = if(s1.ante.isEmpty) scala.collection.immutable.IndexedSeq[Formula](True) else s1.ante
+    val ante2 = if(s2.ante.isEmpty) scala.collection.immutable.IndexedSeq[Formula](True) else s2.ante
+
+    // (1) Do the constraints of the program in s2.succ |- the constraints of the program in s1.succ?
+    // (2) Does the non-modality part of s1.succ |- the non-modality part of the succedent in s2.succ
+    val weakerSucc = vacuousOrProvable(Sequent(getProgramConstraints(s2.succ.head).toIndexedSeq,
+      getProgramConstraints(s1.succ.head).toIndexedSeq)) && vacuousOrProvable(Sequent(IndexedSeq(stripModalities(s1.succ.head)),
+        IndexedSeq(stripModalities(s2.succ.head))))
+    val weakerAnte = (s1.ante.isEmpty && s2.ante.isEmpty) ||
+      (vacuousOrProvable(Sequent(getProgramConstraints(ante1.head).toIndexedSeq,
+      getProgramConstraints(ante2.head).toIndexedSeq)) &&
+      vacuousOrProvable(Sequent(IndexedSeq(ante1.head),
+        IndexedSeq(ante2.head))))
+
+    /*
     // Collect constraints from s1
     {s2.ante++s2.succ}.foreach { fml =>
       ExpressionTraversal.traverse(new ExpressionTraversalFunction() {
@@ -148,13 +196,38 @@ object MinimizationLibrary {
           case ODESystem(_, q) if q != True => fmls2.append(q); Left(None);
           case c => Left(None)
         }
+        override def preF(p: PosInExpr, e: Formula): Either[Option[ExpressionTraversal.StopTraversal], Formula] = e match {
+          case Imply(pre, Box(prog,f)) => fmls2.append(pre); Left(None);
+          case c => Left(None)
+        }
       }, fml)
     }
 
-    val fmls1_atomic = fmls1.map(x => atomicFormulas(x))
-    val fmls2_atomic = fmls2.map(x => atomicFormulas(x))
+    val fmls1_atomic = fmls1.map(x => atomicFormulas(x)).flatten
+    val fmls2_atomic = fmls2.map(x => atomicFormulas(x)).flatten
+
+    println("fmls1: " + fmls1_atomic)
+    println("is smaller than: " + fmls2_atomic + "?" + (fmls1_atomic.length <= fmls2_atomic.length))
 
     fmls1_atomic.length <= fmls2_atomic.length
+    */
+    weakerSucc && weakerAnte
+  }
+
+  def vacuousOrProvable(s: Sequent): Boolean = {
+    s.ante.isEmpty ||
+      s.succ.head == False ||
+      (s.ante.head == True)  ||
+    proveBy(s, master()).isProved
+  }
+
+  /* Note: This one would be nice, but auto cannot (currently) easily prove these things (e.g.,
+  * [{x'=1&x>2}]x>=0 ==> [{x'=1&x>2&y>2}]x>=0
+  * */
+  def entails(s1: Sequent, s2: Sequent): Boolean = {
+    //prove LHS1 |- LHS2, RHS1 |- RHS2
+    proveBy(Sequent(s1.ante, s2.ante),master()).isProved &&
+      proveBy(Sequent(s1.succ, s2.succ),master()).isProved
   }
 
 def anteToFormula(s: Sequent): Formula = {
@@ -179,6 +252,26 @@ def anteToFormula(s: Sequent): Formula = {
   }
 */
 
+  //implicit val ec = ExecutionContext.global
+
+  //def timeoutFuture[A](f: Future[A]): Try[A] =
+  //  Try { Await.result(f, 5.seconds) }
+
+  /*
+  def tryProofByAuto(p: ProvableSig): ProvableSig = {
+    val f = Future { proveBy(p, master()) }
+    try {
+      timeoutFuture(f) match {
+        case Failure(exception) => p
+        case Success(proved) => proved
+      }
+    } catch {
+      case e => p
+    }
+  }
+*/
+  import scala.concurrent.TimeoutException
+
   /* TODO: track source of introduced facts */
   @Tactic(names = "MinAuto",
     premises = "*",
@@ -186,12 +279,14 @@ def anteToFormula(s: Sequent): Formula = {
     conclusion = "Γ |- Δ",
     displayLevel = "browse")
   lazy val minAuto: BuiltInTactic = anon((p: ProvableSig) => {
+    val proved = proveBy(p, master())
+    //val proved2 = tryProofByAuto(p).timeout(3.seconds)
+
+    if(!proved.isProved) throw new TacticAssertionError(s"minAuto requires a Provable that can be proved using Auto (within 5 second time budget")
+
     val simplified = p//proveBy(p, unfoldProgramNormalizeProofless)
 
     val weakenings = simplified.subgoals.map(x => getAutoWeakenings(x))
-
-    println("CWS: " + weakenings)
-    println("CWS2: " + weakenings.flatten)
 
     // Right now, trying all possible weakenings. Really should do this more efficiently.
     val provableWeakenings = weakenings.flatten.map {
@@ -200,14 +295,16 @@ def anteToFormula(s: Sequent): Formula = {
       case prov => prov.isProved
     }
 
-    println("PWS: "+ provableWeakenings)
+    println("PWS: " + provableWeakenings)
 
     val minSequent = if(provableWeakenings.length > 0) {
-      provableWeakenings.foldLeft(provableWeakenings.head)((x,y) => if (isWeaker(x.proved, y.proved)) x else y)
+      provableWeakenings.foldLeft(provableWeakenings.head)((x,y) => if (entails(x.proved, y.proved)) x else y)
     }.proved
     else throw new TacticAssertionError("There should be a provable weakening (id)")
+
     println("MinSequent: ", minSequent)
-    println("ogseq: ", simplified.minSequent)
+
+    //throw new TacticAssertionError("Minimum sequent: )
     proveBy(simplified, master()).apply(minSequent)
   })
 }

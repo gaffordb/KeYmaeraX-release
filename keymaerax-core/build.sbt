@@ -17,6 +17,8 @@ libraryDependencies += "biz.enef" %% "slogging-slf4j" % "0.6.+"
 
 libraryDependencies += "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.13.3"
 
+libraryDependencies += "io.monix" %% "monix" % "2.3.3"
+
 libraryDependencies += "org.apache.commons" % "commons-configuration2" % "2.5"
 
 libraryDependencies += "org.typelevel" %% "paiges-core" % "0.2.1"
