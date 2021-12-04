@@ -18,30 +18,5 @@ import edu.cmu.cs.ls.keymaerax.infrastruct.DependencyAnalysis._
   * Only logs first order formulae
   */
 class MinQETests extends TacticTestBase {
-  "QE Hider: 2 ante, 1 succ, 1 valid ante" should "output used arguments" taggedAs IgnoreInBuildTest in withMathematica { qeTool =>
-    val seq = "x<0, x < -1, y<z, y>0, g>0 \n  ==> x<1, z>0, v>0".asSequent
-
-    println("Before" + seq.prettyString)
-    val pr = proveBy(seq, minQE)
-    println("Proved: " + pr.proved)
-    println("MinSeq: " + pr.minSequent)
-  }
-
-  "QE Hider: 2 ante, 2 succ, 1 necessary ante, both dependent" should "output used arguments" taggedAs IgnoreInBuildTest in withMathematica { qeTool =>
-    val seq = "x>0, x=2 \n  ==> x>=2, y=-1".asSequent
-    println("Before" + seq.prettyString)
-    val pr = proveBy(seq,minQE)
-    println("After" + pr.prettyString)
-    println("Minseq: " + pr.minSequent.prettyString)
-  }
-
-  "QE Hider: QE for id" should "output used arguments" taggedAs IgnoreInBuildTest in withMathematica { qeTool =>
-    val seq = "x>0 & y>0 \n  ==> x>0".asSequent
-    println("Before" + seq.prettyString)
-
-    val pr = proveBy(seq,minQE)
-    println("After" + pr.prettyString)
-    println("MinSeq: " + pr.minSequent)
-  }
-
+  // these are in MinAutoTests now
 }

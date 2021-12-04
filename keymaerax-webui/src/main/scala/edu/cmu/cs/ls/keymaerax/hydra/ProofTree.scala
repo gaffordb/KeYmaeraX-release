@@ -7,6 +7,7 @@ package edu.cmu.cs.ls.keymaerax.hydra
 import edu.cmu.cs.ls.keymaerax.Logging
 import edu.cmu.cs.ls.keymaerax.bellerophon._
 import edu.cmu.cs.ls.keymaerax.bellerophon.parser.BelleParser
+import edu.cmu.cs.ls.keymaerax.btactics.MinimizationLibrary.getFactsFromSequent
 import edu.cmu.cs.ls.keymaerax.btactics.TactixLibrary.{proveBy, unfoldProgramNormalizeProofless}
 import edu.cmu.cs.ls.keymaerax.btactics._
 import edu.cmu.cs.ls.keymaerax.infrastruct.Augmentors._
@@ -35,7 +36,7 @@ trait ProofTreeNodeId {}
   * The [[provable]] function can later perform the computation required to staple the proof together
   * as far as the children have completed it.
   *
-  * The proof treee node also provides infrastructure for letting tactics run to expand this proof tree node.
+  * The proof tree node also provides infrastructure for letting tactics run to expand this proof tree node.
   * @see [[edu.cmu.cs.ls.keymaerax.core.Provable]]
   * @see [[ProvableSig]]
   */
@@ -77,17 +78,16 @@ trait ProofTreeNode {
   def allDescendants: List[ProofTreeNode] = theDescendants
 
   /** Every fact that was witnessed at each explicit proof step */
-  def allWitnessedFacts: List[Formula] = allDescendants.flatMap(x =>
-    proveBy(Sequent(x.conclusion.ante, x.conclusion.succ),
-      unfoldProgramNormalizeProofless).subgoals.flatMap(y => y.ante ++ y.succ))
+  def allWitnessedFacts: List[Formula] = allDescendants.flatMap { x =>
+    getFactsFromSequent(Sequent(x.conclusion.ante, x.conclusion.succ)) }
 
   /** Every fact that was used to close some branch. Note: Only works for minQE and minAuto */
-  def allUsedFacts: Sequent = allDescendants
-    .map(x=>if (x.numSubgoals == 0) x.localProvable.minSequent else Sequent(IndexedSeq[Formula](), IndexedSeq[Formula]()))
-    .foldRight(Sequent(IndexedSeq[Formula](), IndexedSeq[Formula]()))((acc:Sequent,s:Sequent) => acc.glue(s))
+  def allUsedFacts: Set[Formula] = allDescendants
+    .map(x=>if (x.numSubgoals == 0) getFactsFromSequent(x.localProvable.minSequent) else List[Formula]())
+    .foldRight(List[Formula]())((acc, f) => acc ++ f).toSet
 
   /** Everything that was witnessed but wasn't used */
-  def allUnusedFacts: List[Formula] = allWitnessedFacts.filter(x=> !(allUsedFacts.succ ++ allUsedFacts.ante).contains(x))
+  def allUnusedFacts: List[Formula] = allWitnessedFacts.filter(x=> !(allUsedFacts.contains(x)))
 
   /** All direct and indirect ancestors of this node. */
   def allAncestors: List[ProofTreeNode] = theAncestors
