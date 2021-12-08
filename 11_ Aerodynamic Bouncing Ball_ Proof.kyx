@@ -1,0 +1,33 @@
+﻿/* Exported from KeYmaera X v4.9.6 */
+
+Theorem "11: Aerodynamic Bouncing Ball"
+Description "11.12: Proving Aerodynamic Bouncing Balls".
+
+Definitions      /* function symbols cannot change their value */
+  Real H;        /* initial height of ball */
+  Real g;        /* gravitational constant */
+  Real c;        /* elastic damping factor for bounce on the floor (x=0) */
+  Real r;        /* aerodynamic damping factor in the air / air resistance */
+End.
+
+ProgramVariables /* program variables may change their value over time */
+  R x, v;        /* height and vertical velocity of ball */
+End.
+
+Problem
+  (x<=H & v=0 & x>=0) &
+  (g>0 & 1>=c&c>=0 & r>=0)
+ ->
+  [
+    {
+      {?x=0; v:=-c*v;?x!=0;}
+      {{x'=v,v'=-g-r*v^2&x>=0&v>=0} ++ {x'=v,v'=-g+r*v^2&x>=0&v<0}}
+    }*
+  ] (0<=x&x<=H)
+End.
+
+Tactic "11: Aerodynamic Bouncing Ball: Proof"
+minAuto
+End.
+
+End.
