@@ -1,5 +1,4 @@
 * text=auto
-
 *.nb text
 *.scala text
 *.java text
@@ -10,3 +9,6 @@
 *.kya text
 *.js text
 *.sbt text
+./keymaerax-webui/target/scala-2.12/KeYmaeraX-Web-assembly-4.9.6.jar filter=lfs diff=lfs merge=lfs -text
+*.iso filter=lfs diff=lfs merge=lfs -text
+*.jar filter=lfs diff=lfs merge=lfs -text

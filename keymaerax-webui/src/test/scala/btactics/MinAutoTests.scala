@@ -16,7 +16,7 @@ import scala.concurrent.duration.DurationInt
   */
 class MinAutoTests extends TacticTestBase {
   "Compound implication RHS" should "output used arguments" taggedAs IgnoreInBuildTest in withMathematica { qeTool =>
-    val seq = "==> x>0 & y>0 -> x>0".asSequent
+    val seq = "==> x>0 & y>0 -> [?x>=1;++?x<1;{x'=1 & x>0}]x>0".asSequent
     println("Before" + seq.prettyString)
     val pr = proveBy(seq, minAuto)
     println("After" + pr.prettyString)
@@ -49,7 +49,7 @@ class MinAutoTests extends TacticTestBase {
     val pr = proveBy(seq, minAuto)
     println("After: " + pr.prettyString)
     println("MinSeq: " + pr.minSequent)
-    pr.minSequent shouldBe "==> x=H()&v=0&g()>0&true->[{x'=v,v'=-g()}{?x=0;v:=-c()*v;++?x>=0;}](x>=0&x<=H())".asSequent
+    pr.minSequent shouldBe "==> x=H()&v=0&g()>0->[{x'=v,v'=-g()}{?x=0;v:=-c()*v;++?x>=0;}](x>=0&x<=H())".asSequent
 
     val seq2 = "  ==>  x>=0&x=H()&v=0&g()>0 ->[{x'=v,v'=-g() & x<=H()}{?x=0;v:=-c()*v;++?x>=0;}](x>=0&x<=H())".asSequent
     println("Before" + seq2.prettyString)
@@ -71,7 +71,7 @@ class MinAutoTests extends TacticTestBase {
     println("After" + pr4.prettyString)
     println("minSeq: " + pr4.minSequent)
 
-    pr4.minSequent shouldBe "==> x=H()&v=0&g()>0&true->[{x'=v,v'=-g()}{?x=0;?x<=H&false;v:=-c()*v;++?x>=0;}](x>=0&x<=H())".asSequent
+    pr4.minSequent shouldBe "==> x=H()&v=0&g()>0->[{x'=v,v'=-g()}{?x=0;?x<=H&false;v:=-c()*v;++?x>=0;}](x>=0&x<=H())".asSequent
   }
 
   /*
@@ -277,7 +277,13 @@ class MinAutoTests extends TacticTestBase {
 
   "Refine weakenings" should "output used arguments (takes a couple minutes)" taggedAs IgnoreInBuildTest in withMathematica { qeTool =>
     val fml = "==>x>1 & y>1 & z>1 -> [?false & true & x<1 & x>1;]x>=0".asSequent
-    println(refineWeakenings(fml::Nil))
-    proveBy(fml, minAutoXtreme).minSequent shouldBe "==> true->[?false;]x>=0".asSequent
+    println(fml.sameSequentAs(fml))
+    proveBy(fml, minAutoXtreme).minSequent shouldBe "==> z>1->[?x>1;]x>=0".asSequent
+  }
+
+  "test tests" should "provide correct output" taggedAs IgnoreInBuildTest in withMathematica { qeTool =>
+    //val fml = "(vC>=vL -> (pL-pC <= vC*(vL-vC)/-B + 1/2*-B*((vL-vC)/-B)^2 - (vL * ((vL-vC)/-B)))) & vC >= 0 ==> pC <= pL".asSequent
+    val fml = "(pC < pL & vC>=vL & B>0 -> (pL-pC <= vC*(vC-vL)/-B + 1/2*-B*((vC-vL)/-B)^2 - (vL * ((vC-vL)/-B))))".asFormula
+    println(proveBy(fml, master()).isProved)
   }
 }

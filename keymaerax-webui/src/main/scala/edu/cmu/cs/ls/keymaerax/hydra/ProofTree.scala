@@ -64,9 +64,24 @@ trait ProofTreeNode {
 
   /** Indicates whether or not the proof from this node downwards is done (potentially expensive).
     * @see [[ProvableSig.isProved]] */
-  final def isProved: Boolean = provable.isProved
+    // Hack to print out unused facts when done.
+  final def isProved: Boolean = { if(provable.isProved) allUnusedFacts; provable.isProved }
+
+  /* Hack to get this to print only once (usually prints twice)*/
+  var printed: Boolean = false
+
+  /*
+  def printOnce(unusedFacts: List[Formula]) = {
+    if(!printed) {
+      //println(printed)
+      printed = true
+    }
+  }
+  */
+
 
   // proof tree navigation
+
 
   /** The node's parent, None if root. */
   def parent: Option[ProofTreeNode]

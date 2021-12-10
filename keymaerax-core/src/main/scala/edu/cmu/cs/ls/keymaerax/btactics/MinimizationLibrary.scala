@@ -6,7 +6,6 @@
 package edu.cmu.cs.ls.keymaerax.btactics
 
 import edu.cmu.cs.ls.keymaerax.bellerophon._
-import edu.cmu.cs.ls.keymaerax.btactics.IsabelleSyntax.listConj
 import edu.cmu.cs.ls.keymaerax.btactics.TacticFactory._
 import edu.cmu.cs.ls.keymaerax.btactics.TactixLibrary._
 import edu.cmu.cs.ls.keymaerax.btactics.macros.Tactic
@@ -20,8 +19,8 @@ import edu.cmu.cs.ls.keymaerax.pt.ProvableSig
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 
-import scala.::
-import scala.collection.immutable.{IndexedSeq, Nil}
+import scala.annotation.tailrec
+import scala.collection.immutable.{::, IndexedSeq, List, Nil}
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration.{Duration, DurationInt}
 import scala.concurrent.{Await, TimeoutException}
@@ -84,7 +83,7 @@ object MinimizationLibrary {
   }
 
   def getAutoWeakenings(original: Sequent): List[Sequent] = {
-    getAssumptionWeakenings(original)++getDomainConstraintWeakenings(original)
+    (getAssumptionWeakenings(original) ++ getDomainConstraintWeakenings(original)).distinct
   }
 
   def getDomainConstraintWeakenings(original: Sequent): List[Sequent] = {
@@ -116,8 +115,16 @@ object MinimizationLibrary {
   def formulaSimplifications(f: Formula): List[Formula] = {
     val atomic_conjuncts = (conjuncts(f) filter { x =>
       !x.toString.contains("&")
-    })
-    (((0 to atomic_conjuncts.length) flatMap atomic_conjuncts.combinations) map listConj).toList
+    }).toSet.toList
+    (((0 to atomic_conjuncts.length) flatMap atomic_conjuncts.combinations) map listConj).toSet.toList
+  }
+
+  def listConj(ls:List[Formula]) : Formula = {
+    ls match {
+      case Nil => True
+      case x :: Nil => x
+      case (x::xs) => And(x,listConj(xs))
+    }
   }
 
   /* Note: This only works if the relevant conjuncts occur before any instances of programs */
@@ -129,7 +136,8 @@ object MinimizationLibrary {
         case Diamond(_,_) => Nil; Left(Some(stop))
         case And(l, rest) => out.appendAll(List(l,rest)); Left(None);
         case Imply(l, Box(_,_)) => out.append(l); Left(None);
-        case c => Left(None)
+        case c: AtomicFormula => out.append(c); Left(None);
+        case _ => Left(None)
       }
     }, fml)
     out.toList
@@ -196,16 +204,21 @@ object MinimizationLibrary {
     * All of our mutations strictly remove tokens, so this is a fine proxy for which one has been weakened the most.
     * Therefore, to detect which of two mutations is more weakened, we can simply count tokens. */
   def isWeakerByTokenCount(s1: Sequent, s2: Sequent): Boolean = {
-    assert(s1.succ.length == 1 && s2.succ.length == 1, s"We have not reasoned about Sequents with multiple succedents yet.")
+    val s1Tokens = getTokenCount(s1)
 
-    val s1Tokens = (s1.succ flatMap {x => (atomicFormulas(x) ++ getProgramConstraints(x)).filter(fml => fml != True)}) ++
-      (s1.ante flatMap {x => (atomicFormulas(x) ++ getProgramConstraints(x)).filter(fml => fml != True)})
+    val s2Tokens = getTokenCount(s2)
 
-    val s2Tokens = (s2.succ flatMap {x => (atomicFormulas(x) ++ getProgramConstraints(x)).filter(fml => fml != True)}) ++
-      (s2.ante flatMap {x => (atomicFormulas(x) ++ getProgramConstraints(x)).filter(fml => fml != True)})
-
-    s1Tokens.length <= s2Tokens.length
+    s1Tokens <= s2Tokens
   }
+
+  def getTokenCount(s1: Sequent): Int = {
+    assert(s1.succ.length == 1, s"We have not reasoned about Sequents with multiple succedents yet.")
+
+    ((s1.succ flatMap {x => (atomicFormulas(x) ++ getProgramConstraints(x)).filter(fml => fml != True)}) ++
+      (s1.ante flatMap {x => (atomicFormulas(x) ++ getProgramConstraints(x)).filter(fml => fml != True)})).length
+  }
+
+
 
   /** Weakenings get weird when you get to empty sequents,
     * which happens a lot when you remove the last element from an assumption.
@@ -268,8 +281,9 @@ def anteToFormula(s: Sequent): Formula = {
     }
   }
 
+  // Brute force, don't use
   def getProvableWeakenings(s: Sequent): List[Sequent] = {
-    val weakenings = getAutoWeakenings(s).toSet
+    val weakenings = getAutoWeakenings(s)
     //println("weakenings: ", weakenings)
 
     // Right now, trying all possible weakenings. Really should do this more efficiently.
@@ -281,10 +295,51 @@ def anteToFormula(s: Sequent): Formula = {
         }
     }.filter { prov =>
       prov.isProved
-    }.map(x => x.proved).toList
+    }.map(x => x.proved)
   }
 
-  /** Greedily get weakenings from your weakest weakening until you can no longer weaken anything provable.
+  def getWeakestProvable(s: Sequent): Sequent = {
+    // First sort by the shortest (bc we can get some (true & true) formulas which are just as weak but not what we want) then sort by the weakest
+    val weakenings = getAutoWeakenings(s).groupBy {
+      getTokenCount
+    }.map(_._2.sortBy(_.toString.length)).toList.sortWith((x,y) => isWeakerByTokenCount(x.head, y.head))
+
+    weakenings.foreach { x => x foreach { y => println(y.toString) } }
+
+    getWeakestProvableRec(weakenings, 0, weakenings.length-1, s)
+  }
+
+  def getFirstProvable(s: List[Sequent]): Option[Sequent] = {
+    s foreach { x =>
+      tryProofByAuto(x, 10.seconds) match {
+        case Some(prov) => if (prov.isProved) return  Some(prov.proved)
+        case _ => None // just an arbitrary thing where p.proved is false
+      }
+    }
+    None
+  }
+
+  // Can't naively do binary search over a "sorted" list of weakenings, because weakenings with the same number of tokens can't really be compared.
+  // This could be greatly improved by just intelligently not trying things that we know won't work.
+  @tailrec
+  def getWeakestProvableRec(weakenings: List[List[Sequent]], start: Int = 0, end: Int, best: Sequent): Sequent =
+  {
+    if (start > end) {
+      return best
+    }
+
+    val mid = start + (end - start) / 2
+
+    val prov = getFirstProvable(weakenings(mid))
+
+    prov match {
+      case Some(prov) => getWeakestProvableRec(weakenings, start, (mid-1), prov)
+      case None       => getWeakestProvableRec(weakenings, (mid+1), end, best)
+    }
+  }
+
+  /** DON'T USE THIS IT'S TOO SLOW!
+    * Greedily get weakenings from your weakest weakening until you can no longer weaken anything provable.
     * This is a lazy way of exploring these sequents, but it expensive and is not optimal.
     * */
   def refineWeakenings(weakenings: List[Sequent], witnessed: List[Sequent] = Nil): List[Sequent] = {
@@ -298,6 +353,19 @@ def anteToFormula(s: Sequent): Formula = {
           val candidateWeakening = if(candidateWeakenings.length == 1) candidateWeakenings.head else candidateWeakenings.foldLeft(candidateWeakenings.head)((x,y) => if (isWeakerByTokenCount(x, y)) x else y)
           refineWeakenings(List(candidateWeakening), candidateWeakenings++witnessed) ++ refineWeakenings(xs, candidateWeakenings++witnessed)
         }
+    }
+  }
+
+  /** Greedily get weakenings from your weakest weakening until you can no longer weaken anything provable.
+    * This is a lazy way of exploring these sequents, but it expensive and is not optimal.
+    * */
+  @tailrec
+  def refineWeakening(weakening: Sequent): Sequent = {
+    val w2 = getWeakestProvable(weakening)
+    if(w2.sameSequentAs(weakening)) {
+      weakening
+    } else {
+      refineWeakening(w2)
     }
   }
 
@@ -322,10 +390,7 @@ def anteToFormula(s: Sequent): Formula = {
 
     //println("PWS: " + provableWeakenings)
 
-    val minSequent = if(provableWeakenings.nonEmpty) {
-      provableWeakenings.foldLeft(provableWeakenings.head)((x,y) => if (isWeakerByTokenCount(x, y)) x else y)
-    }
-    else throw new TacticAssertionError("There should be a provable weakening (id)")
+    val minSequent = (simplified.subgoals map (x=> getWeakestProvable(x))).toList.foldLeft(simplified.conclusion)((x,y) => if (isWeakerByTokenCount(x, y)) x else y)
 
     println("MinSequent: ", minSequent)
 
@@ -351,14 +416,9 @@ def anteToFormula(s: Sequent): Formula = {
 
     //assert(simplified.subgoals.length == 1, "we don't want to try to minimize over multiple goals, too hard")
 
-    val provableWeakenings = simplified.subgoals flatMap (x=> refineWeakenings(x::Nil))
-
     //println("PWS: " + provableWeakenings)
 
-    val minSequent = if(provableWeakenings.nonEmpty) {
-      provableWeakenings.foldLeft(provableWeakenings.head)((x,y) => if (isWeakerByTokenCount(x, y)) x else y)
-    }
-    else throw new TacticAssertionError("There should be a provable weakening (id)")
+    val minSequent = refineWeakening(simplified.conclusion)
 
     println("MinSequent: ", minSequent)
 
@@ -376,7 +436,7 @@ def anteToFormula(s: Sequent): Formula = {
     val tokens = (s.succ flatMap {x => atomicFormulas(x) ++ getProgramConstraints(x) }) ++
       (s.ante flatMap {x => (atomicFormulas(x) ++ getProgramConstraints(x)).filter(fml => fml != True)})
 
-    tokens.toSet.toList
+    tokens.toList.distinct
   }
 }
 
